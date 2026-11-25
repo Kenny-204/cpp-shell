@@ -10,40 +10,34 @@
 
 using namespace std;
 
-string getPathFromHome() {
-    int i = 0;
-    string str = filesystem::current_path().string();
-    int count = 0;
-    while (i < str.size() && count != 3) {
-        if (str[i] == '/') count++;
-        i++;
-    }
-    string dir = str.substr(i);
-    return dir;
+string getPromptPath() {
+    error_code ec;
+    filesystem::path path = filesystem::current_path(ec);
+    if (ec) return "~";
+    return path.filename().empty() ? path.string() : path.filename().string();
 }
 
-
-
 void showHelp() {
- 
-    cout << "===== Shell Help =====\n";
-    cout << "This shell supports the following commands and features:\n\n";
-    cout << "  cd <dir>       - Change directory to <dir>\n";
-    cout << "  help           - Display this help message\n";
-    cout << "  checkbg        - Check the status of background processes\n";
-    cout << "  <cmd> &        - Run <cmd> in the background\n";
-    cout << "  <cmd> | <cmd>  - Pipe output of one command to another\n";
-    cout << "  <cmd> > file   - Redirect output to file (overwrite)\n";
-    cout << "  <cmd> >> file  - Redirect output to file (append)\n";
-    cout << "  exit           - Exits the shell\n";
-    cout << "======================\n";
+    cout << "===== Shell Help =====\n"
+         << "  cd [dir]        Change directory (or use HOME when omitted)\n"
+         << "  cd ~            Change to the HOME directory\n"
+         << "  help            Display this help message\n"
+         << "  checkbg         Check background process status\n"
+         << "  <cmd> &         Run a command in the background\n"
+         << "  <cmd> | <cmd>   Pipe commands\n"
+         << "  <cmd> > file    Redirect output (overwrite)\n"
+         << "  <cmd> >> file   Redirect output (append)\n"
+         << "  exit            Exit the shell\n"
+         << "======================\n";
 }
 
 string handleCommand(vector<string> input) {
     if (input.empty()) return "";
+
     if (input[0] == "cd") {
-        if (input.size() == 1) return "Path not provided...\n";
-        changeDir(input[1]);
+        if (input.size() == 1) changeDir("~");
+        else if (input.size() == 2) changeDir(input[1]);
+        else cerr << "cd: too many arguments\n";
         return "";
     }
     if (input[0] == "checkbg") {
@@ -54,24 +48,34 @@ string handleCommand(vector<string> input) {
         showHelp();
         return "";
     }
-    if (handleRedirections(input)) return "Data written to file... \n";
-    if (input[input.size() - 1] == "&") return executeCommand(input, true);
-    string output = handlePipes(input);
-    return output;
+    if (input[0] == "exit") {
+        cout << "BYE...\n";
+        return "__CPP_SHELL_EXIT__";
+    }
+    if (handleRedirections(input)) return "";
+    if (!input.empty() && input.back() == "&") return executeCommand(input, true);
+    return handlePipes(input);
 }
 
-int main(int argc, char* argv[]) {
+int main() {
     while (true) {
-        cout << "[~/" << getPathFromHome() << "]$ ";
-        string input;
-        getline(cin, input);
-        if (input == "exit") {
-            cout << "BYE..." << endl;
-            return 0;
-        }
-        vector<string> parsedInput = parser(input);
-        cout << handleCommand(parsedInput);
-    }
+        cout << "[~ / " << getPromptPath() << "]$ " << flush;
 
+        string input;
+        if (!getline(cin, input)) {
+            cout << "\nBYE...\n";
+            break;
+        }
+
+        vector<string> parsedInput = parser(input);
+        if (parsedInput.empty() && !input.empty()) {
+            cerr << "cpp-shell: unterminated quote\n";
+            continue;
+        }
+
+        string output = handleCommand(parsedInput);
+        if (output == "__CPP_SHELL_EXIT__") break;
+        if (!output.empty()) cout << output;
+    }
     return 0;
 }

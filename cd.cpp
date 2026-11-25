@@ -1,28 +1,25 @@
 #include "cd.h"
 
+#include <cstdlib>
+#include <cerrno>
+#include <cstring>
+
 using namespace std;
 
 void changeDir(string givenPath) {
-    filesystem::path newPath;
-
-    if (givenPath == ".") {
-        return;
-    }
-    else if (givenPath == "..") {
-        newPath = filesystem::current_path().parent_path();
-    }
-    else {
-        newPath = filesystem::absolute(givenPath);
+    if (givenPath.empty() || givenPath == "~") {
+        const char* home = getenv("HOME");
+        if (!home || *home == '\0') {
+            cerr << "cd: HOME is not set\n";
+            return;
+        }
+        givenPath = home;
     }
 
-    if (newPath.empty()) {
-        cerr << "cd: No parent directory.\n";
-        return;
-    }
+    filesystem::path newPath(givenPath);
+    if (!newPath.is_absolute()) newPath = filesystem::absolute(newPath);
 
-    if (chdir(newPath.c_str()) != 0) {
-        perror("cd");
-    }
-
-    return;
+    error_code ec;
+    filesystem::current_path(newPath, ec);
+    if (ec) cerr << "cd: " << givenPath << ": " << ec.message() << "\n";
 }
